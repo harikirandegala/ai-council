@@ -65,13 +65,13 @@ def _ask_openrouter(model_id: str, display_name: str, query: str) -> dict:
         return {"name": display_name, "response": _simulate(display_name, query)["response"], "status": "simulated"}
 
 def ask_chatgpt(query: str) -> dict:
-    return _ask_openrouter("openai/gpt-3.5-turbo", "ChatGPT", query)
+    return _ask_openrouter("meta-llama/llama-3.1-8b-instruct:free", "ChatGPT", query)
 
 def ask_claude(query: str) -> dict:
-    return _ask_openrouter("anthropic/claude-3-haiku", "Claude", query)
+    return _ask_openrouter("mistralai/mistral-7b-instruct:free", "Claude", query)
 
 def ask_grok(query: str) -> dict:
-    return _ask_openrouter("x-ai/grok-beta", "Grok", query)
+    return _ask_openrouter("google/gemma-3-4b-it:free", "Grok", query)
 
 # ─── PERPLEXITY ───────────────────────────────────────────────────────────────
 def ask_perplexity(query: str) -> dict:
