@@ -15,7 +15,7 @@ GEMINI_API_KEY     = os.environ.get("GEMINI_API_KEY", "")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 
 OPENROUTER_BASE = "https://openrouter.ai/api/v1/chat/completions"
-GEMINI_BASE     = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+GEMINI_BASE     = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 
 HEADMASTER_PROMPT = """You are the HEAD MASTER AI — a supreme evaluator overseeing a council of 5 AI systems.
 
