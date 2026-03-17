@@ -17,7 +17,7 @@ OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 PERPLEXITY_API_KEY = os.environ.get("PERPLEXITY_API_KEY", "")
 
 OPENROUTER_BASE = "https://openrouter.ai/api/v1/chat/completions"
-GEMINI_BASE     = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+GEMINI_BASE     = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 
 AI_NAMES = ["Gemini", "ChatGPT", "Claude", "Grok", "Perplexity"]
 
@@ -76,25 +76,6 @@ def ask_grok(query: str) -> dict:
 # ─── PERPLEXITY ───────────────────────────────────────────────────────────────
 def ask_perplexity(query: str) -> dict:
     return _ask_openrouter("deepseek/deepseek-r1:free", "Perplexity", query)
-    try:
-        headers = {
-            "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        payload = {
-            "model": "llama-3.1-sonar-small-128k-online",
-            "messages": [{"role": "user", "content": query}],
-            "max_tokens": 600
-        }
-        resp = requests.post("https://api.perplexity.ai/chat/completions",
-                             headers=headers, json=payload, timeout=30)
-        resp.raise_for_status()
-        data = resp.json()
-        text = data["choices"][0]["message"]["content"]
-        return {"name": "Perplexity", "response": text, "status": "success"}
-    except Exception as e:
-        logger.error(f"Perplexity error: {e}")
-        return {"name": "Perplexity", "response": _simulate("Perplexity", query)["response"], "status": "simulated"}
 
 # ─── SIMULATION FALLBACK ──────────────────────────────────────────────────────
 SIMULATED_STYLES = {
