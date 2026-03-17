@@ -75,9 +75,7 @@ def ask_grok(query: str) -> dict:
 
 # ─── PERPLEXITY ───────────────────────────────────────────────────────────────
 def ask_perplexity(query: str) -> dict:
-    if not PERPLEXITY_API_KEY:
-        logger.warning("PERPLEXITY_API_KEY not set – simulating.")
-        return _simulate("Perplexity", query)
+    return _ask_openrouter("deepseek/deepseek-r1:free", "Perplexity", query)
     try:
         headers = {
             "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
