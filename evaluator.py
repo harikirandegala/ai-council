@@ -16,15 +16,15 @@ GEMINI_API_KEY     = os.environ.get("GEMINI_API_KEY", "")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 
 OPENROUTER_BASE = "https://openrouter.ai/api/v1/chat/completions"
-GEMINI_BASE     = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+GEMINI_BASE     = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 
 # Models used for evaluation (one per AI name)
 EVAL_MODELS = {
     "Gemini":     ("gemini", None),
-    "ChatGPT":    ("openrouter", "openai/gpt-3.5-turbo"),
-    "Claude":     ("openrouter", "anthropic/claude-3-haiku"),
-    "Grok":       ("openrouter", "x-ai/grok-beta"),
-    "Perplexity": ("openrouter", "meta-llama/llama-3.1-8b-instruct:free"),
+    "ChatGPT":    ("openrouter", "meta-llama/llama-3.1-8b-instruct:free"),
+    "Claude":     ("openrouter", "mistralai/mistral-7b-instruct:free"),
+    "Grok":       ("openrouter", "google/gemma-3-4b-it:free"),
+    "Perplexity": ("openrouter", "deepseek/deepseek-r1:free"),
 }
 
 EVAL_PROMPT_TEMPLATE = """You are {evaluator_name}, acting as a judge.
