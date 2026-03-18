@@ -1,142 +1,166 @@
 """
-ai_clients.py - Handles all AI API calls
-Supports: Gemini, OpenRouter (Claude/GPT/Grok), Perplexity
-Falls back to simulation if APIs are unavailable.
+ai_clients.py - FIXED VERSION
+Correct model IDs for 2025, keys re-read per request (fixes Render env issue),
+Gemini 2.0-flash, working OpenRouter free-tier models.
 """
 import os
-import json
 import logging
 import requests
-import time
 
 logger = logging.getLogger(__name__)
-
-# ─── API KEYS (set these in .env or environment) ────────────────────────────
-GEMINI_API_KEY     = os.environ.get("GEMINI_API_KEY", "")
-OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
-PERPLEXITY_API_KEY = os.environ.get("PERPLEXITY_API_KEY", "")
 
 OPENROUTER_BASE = "https://openrouter.ai/api/v1/chat/completions"
 GEMINI_BASE     = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 
 AI_NAMES = ["Gemini", "ChatGPT", "Claude", "Grok", "Perplexity"]
 
-# ─── GEMINI ──────────────────────────────────────────────────────────────────
+# Keys re-read every call so Render env vars are always picked up fresh
+def _gemini_key():     return os.environ.get("GEMINI_API_KEY", "").strip()
+def _openrouter_key(): return os.environ.get("OPENROUTER_API_KEY", "").strip()
+def _perplexity_key(): return os.environ.get("PERPLEXITY_API_KEY", "").strip()
+
+def _debug_keys():
+    def mask(k): return f"{k[:4]}...{k[-4:]}" if len(k) > 8 else "(not set)"
+    logger.info(f"KEYS → Gemini:{mask(_gemini_key())} | OpenRouter:{mask(_openrouter_key())} | Perplexity:{mask(_perplexity_key())}")
+
+# Verified working OpenRouter model IDs (March 2025)
+OR_MODELS = {
+    "ChatGPT":  "openai/gpt-3.5-turbo",
+    "Claude":   "anthropic/claude-3-haiku:beta",
+    "Grok":     "x-ai/grok-3-mini-beta",
+    "LLaMA":    "meta-llama/llama-3.3-70b-instruct:free",
+}
+
 def ask_gemini(query: str) -> dict:
-    if not GEMINI_API_KEY:
+    key = _gemini_key()
+    if not key:
         logger.warning("GEMINI_API_KEY not set – simulating.")
         return _simulate("Gemini", query)
     try:
-        url = f"{GEMINI_BASE}?key={GEMINI_API_KEY}"
-        payload = {"contents": [{"parts": [{"text": query}]}]}
-        resp = requests.post(url, json=payload, timeout=30)
+        url = f"{GEMINI_BASE}?key={key}"
+        payload = {
+            "contents": [{"parts": [{"text": query}]}],
+            "generationConfig": {"maxOutputTokens": 600}
+        }
+        resp = requests.post(url, json=payload, timeout=35)
+        logger.info(f"Gemini HTTP {resp.status_code}")
+        if resp.status_code != 200:
+            logger.error(f"Gemini body: {resp.text[:400]}")
         resp.raise_for_status()
-        data = resp.json()
-        text = data["candidates"][0]["content"]["parts"][0]["text"]
+        text = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
         return {"name": "Gemini", "response": text, "status": "success"}
     except Exception as e:
         logger.error(f"Gemini error: {e}")
         return {"name": "Gemini", "response": _simulate("Gemini", query)["response"], "status": "simulated"}
 
-# ─── OPENROUTER (GPT / Claude / Grok) ────────────────────────────────────────
 def _ask_openrouter(model_id: str, display_name: str, query: str) -> dict:
-    if not OPENROUTER_API_KEY:
+    key = _openrouter_key()
+    if not key:
         logger.warning(f"OPENROUTER_API_KEY not set – simulating {display_name}.")
         return _simulate(display_name, query)
     try:
         headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Authorization": f"Bearer {key}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://ai-council.app",
-            "X-Title": "AI Council System"
+            "HTTP-Referer": "https://ai-council.onrender.com",
+            "X-Title": "AI Council System",
         }
         payload = {
             "model": model_id,
             "messages": [{"role": "user", "content": query}],
-            "max_tokens": 600
+            "max_tokens": 600,
         }
-        resp = requests.post(OPENROUTER_BASE, headers=headers, json=payload, timeout=30)
+        resp = requests.post(OPENROUTER_BASE, headers=headers, json=payload, timeout=40)
+        logger.info(f"{display_name} ({model_id}) HTTP {resp.status_code}")
+        if resp.status_code != 200:
+            logger.error(f"{display_name} body: {resp.text[:400]}")
         resp.raise_for_status()
-        data = resp.json()
-        text = data["choices"][0]["message"]["content"]
+        text = resp.json()["choices"][0]["message"]["content"]
         return {"name": display_name, "response": text, "status": "success"}
     except Exception as e:
         logger.error(f"{display_name} error: {e}")
         return {"name": display_name, "response": _simulate(display_name, query)["response"], "status": "simulated"}
 
 def ask_chatgpt(query: str) -> dict:
-    return _ask_openrouter("meta-llama/llama-3.1-8b-instruct:free", "ChatGPT", query)
+    return _ask_openrouter(OR_MODELS["ChatGPT"], "ChatGPT", query)
 
 def ask_claude(query: str) -> dict:
-    return _ask_openrouter("mistralai/mistral-7b-instruct:free", "Claude", query)
+    return _ask_openrouter(OR_MODELS["Claude"], "Claude", query)
 
 def ask_grok(query: str) -> dict:
-    return _ask_openrouter("google/gemma-3-4b-it:free", "Grok", query)
+    return _ask_openrouter(OR_MODELS["Grok"], "Grok", query)
 
-# ─── PERPLEXITY ───────────────────────────────────────────────────────────────
 def ask_perplexity(query: str) -> dict:
-    return _ask_openrouter("deepseek/deepseek-r1:free", "Perplexity", query)
+    key = _perplexity_key()
+    if not key:
+        logger.warning("PERPLEXITY_API_KEY not set – using OpenRouter LLaMA fallback.")
+        r = _ask_openrouter(OR_MODELS["LLaMA"], "Perplexity", query)
+        r["name"] = "Perplexity"   # keep display name correct
+        return r
+    try:
+        headers = {
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": "sonar",
+            "messages": [{"role": "user", "content": query}],
+            "max_tokens": 600,
+        }
+        resp = requests.post("https://api.perplexity.ai/chat/completions",
+                             headers=headers, json=payload, timeout=40)
+        logger.info(f"Perplexity HTTP {resp.status_code}")
+        if resp.status_code != 200:
+            logger.error(f"Perplexity body: {resp.text[:400]}")
+        resp.raise_for_status()
+        text = resp.json()["choices"][0]["message"]["content"]
+        return {"name": "Perplexity", "response": text, "status": "success"}
+    except Exception as e:
+        logger.error(f"Perplexity error: {e}")
+        return {"name": "Perplexity", "response": _simulate("Perplexity", query)["response"], "status": "simulated"}
 
-# ─── SIMULATION FALLBACK ──────────────────────────────────────────────────────
 SIMULATED_STYLES = {
     "Gemini": (
-        "As Google's Gemini, I approach this with multimodal reasoning. "
-        "The question '{q}' is multifaceted. "
-        "From a data-driven perspective, the key insight is that this topic involves "
-        "interconnected systems. Consider the foundational principles first: we must "
-        "examine both the immediate context and longer-term implications. "
-        "Structurally, the answer involves three layers: (1) the core mechanism, "
-        "(2) practical applications, and (3) edge cases worth noting. "
-        "My recommendation is to start with the fundamentals, then build upward "
-        "toward more complex considerations. Verification with recent sources is advised."
+        "As Google's Gemini 2.0, I approach '{q}' with multimodal reasoning. "
+        "From a data-driven perspective the key insight is that this topic involves "
+        "interconnected systems. Structurally the answer has three layers: "
+        "(1) the core mechanism, (2) practical applications, (3) notable edge cases. "
+        "Start with fundamentals, then build toward complexity."
     ),
     "ChatGPT": (
         "Great question! '{q}' — let me break this down clearly. "
-        "First, the short answer: this is a nuanced topic with several important dimensions. "
-        "Here's what you need to know: the primary consideration is understanding "
-        "the underlying mechanism. Secondary factors include context and use-case. "
-        "To summarize: approach this step-by-step, validate your assumptions, "
-        "and always consider the broader implications. Happy to dive deeper on any aspect!"
+        "Short answer: this is nuanced with several important dimensions. "
+        "Primary consideration: understanding the underlying mechanism. "
+        "Secondary factors: context and use-case. "
+        "Summary: approach step-by-step, validate assumptions, consider broader implications."
     ),
     "Claude": (
-        "Thinking carefully about '{q}': this is an interesting question that deserves "
-        "a thorough response. Let me reason through it. The core issue here relates to "
-        "how we frame the problem. There are legitimate perspectives on multiple sides. "
-        "What seems most defensible, given available evidence, is a nuanced view that "
-        "acknowledges complexity. I'd highlight: accuracy matters, clarity matters, "
-        "and intellectual honesty requires admitting uncertainty where it exists. "
-        "My considered view: proceed thoughtfully, seek multiple sources, and remain open to revision."
+        "Thinking carefully about '{q}': this deserves a thorough response. "
+        "The core issue relates to how we frame the problem — legitimate perspectives exist on multiple sides. "
+        "What seems most defensible given available evidence is a nuanced view acknowledging complexity. "
+        "Accuracy, clarity, and intellectual honesty about uncertainty are essential here."
     ),
     "Grok": (
-        "'{q}' — straight to the point: here's the unfiltered take. "
-        "Most answers you'll find are either overcomplicated or dancing around the real issue. "
-        "The actual answer is simpler than people make it: understand the first principles, "
-        "ignore the noise, and focus on what actually matters. "
-        "Bold claim: 80% of the complexity in this topic is manufactured. "
-        "Cut through it. The fundamentals are accessible to anyone willing to think clearly. "
-        "Don't overthink it — act on the core insight."
+        "'{q}' — straight to the point: most answers overcomplicate this. "
+        "The actual answer is simpler: understand first principles, ignore the noise. "
+        "Bold claim: 80% of the complexity here is manufactured. "
+        "Cut through it. The fundamentals are accessible to anyone willing to think clearly."
     ),
     "Perplexity": (
-        "Based on current sources regarding '{q}': recent research and expert consensus "
-        "point to a well-established understanding. Multiple authoritative references confirm "
-        "the key points. The latest data as of this year shows a clear trend. "
-        "Citing relevant studies: the evidence strongly supports the mainstream view, "
-        "while also acknowledging emerging perspectives. Cross-referencing multiple "
-        "information streams, the most reliable answer integrates both established "
-        "knowledge and recent developments. Sources: [web synthesis]."
-    )
+        "Based on current sources for '{q}': recent research and expert consensus "
+        "point to a well-established understanding. Multiple authoritative references confirm key points. "
+        "The evidence strongly supports the mainstream view while acknowledging emerging perspectives. "
+        "Cross-referencing multiple streams yields the most reliable answer."
+    ),
 }
 
 def _simulate(name: str, query: str) -> dict:
-    template = SIMULATED_STYLES.get(name, "I would answer: {q}")
-    response = template.replace("{q}", query[:120])
-    return {"name": name, "response": response, "status": "simulated"}
+    template = SIMULATED_STYLES.get(name, "My answer to '{q}': this requires careful analysis.")
+    return {"name": name, "response": template.replace("{q}", query[:120]), "status": "simulated"}
 
-# ─── MAIN ORCHESTRATOR ────────────────────────────────────────────────────────
 def get_all_responses(query: str) -> list:
-    """Fetch responses from all 5 AIs concurrently (sequential for simplicity)."""
     from concurrent.futures import ThreadPoolExecutor, as_completed
-
+    _debug_keys()
     fetchers = {
         "Gemini":     lambda: ask_gemini(query),
         "ChatGPT":    lambda: ask_chatgpt(query),
@@ -144,7 +168,6 @@ def get_all_responses(query: str) -> list:
         "Grok":       lambda: ask_grok(query),
         "Perplexity": lambda: ask_perplexity(query),
     }
-
     results = {}
     with ThreadPoolExecutor(max_workers=5) as executor:
         future_map = {executor.submit(fn): name for name, fn in fetchers.items()}
@@ -153,8 +176,6 @@ def get_all_responses(query: str) -> list:
             try:
                 results[name] = future.result()
             except Exception as e:
-                logger.error(f"Failed to get response from {name}: {e}")
+                logger.error(f"Failed {name}: {e}")
                 results[name] = _simulate(name, query)
-
-    # Return in consistent order
     return [results[n] for n in AI_NAMES if n in results]
