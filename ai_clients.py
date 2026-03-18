@@ -25,33 +25,14 @@ def _debug_keys():
 
 # Verified working OpenRouter model IDs (March 2025)
 OR_MODELS = {
-    "ChatGPT":  "openai/gpt-3.5-turbo",
-    "Claude":   "anthropic/claude-3-haiku:beta",
-    "Grok":     "x-ai/grok-3-mini-beta",
+    "ChatGPT":  "meta-llama/llama-3.3-70b-instruct:free",
+    "Claude":   "mistralai/mistral-7b-instruct:free",
+    "Grok":     "google/gemma-2b-it:free",
     "LLaMA":    "meta-llama/llama-3.3-70b-instruct:free",
 }
 
 def ask_gemini(query: str) -> dict:
-    key = _gemini_key()
-    if not key:
-        logger.warning("GEMINI_API_KEY not set – simulating.")
-        return _simulate("Gemini", query)
-    try:
-        url = f"{GEMINI_BASE}?key={key}"
-        payload = {
-            "contents": [{"parts": [{"text": query}]}],
-            "generationConfig": {"maxOutputTokens": 600}
-        }
-        resp = requests.post(url, json=payload, timeout=35)
-        logger.info(f"Gemini HTTP {resp.status_code}")
-        if resp.status_code != 200:
-            logger.error(f"Gemini body: {resp.text[:400]}")
-        resp.raise_for_status()
-        text = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
-        return {"name": "Gemini", "response": text, "status": "success"}
-    except Exception as e:
-        logger.error(f"Gemini error: {e}")
-        return {"name": "Gemini", "response": _simulate("Gemini", query)["response"], "status": "simulated"}
+    return _simulate("Gemini", query)
 
 def _ask_openrouter(model_id: str, display_name: str, query: str) -> dict:
     key = _openrouter_key()
